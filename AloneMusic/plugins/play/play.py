@@ -9,6 +9,7 @@
 import asyncio
 import random
 import string
+import traceback # SECURITY & DEBUG FIX: To log exact errors in Render console
 
 from pyrogram import filters
 from pyrogram.types import InlineKeyboardMarkup, InputMediaPhoto, Message
@@ -94,7 +95,6 @@ async def play_commnd(
 
     asyncio.create_task(delete_after_delay(sticker_msg))
 
-    # स्टिकर के बाद का play message
     mystic = await message.reply_text(_["play_2"].format(channel) if channel else emoji)
     plist_id = None
     slider = None
@@ -115,8 +115,11 @@ async def play_commnd(
     if audio_telegram:
         if audio_telegram.file_size > 104857600:
             return await mystic.edit_text(_["play_5"])
-        seconds_to_min(audio_telegram.duration)
-        if (audio_telegram.duration) > config.DURATION_LIMIT:
+        
+        # FIX: Handled NoneType duration
+        duration = getattr(audio_telegram, "duration", 0) or 0 
+        seconds_to_min(duration)
+        if duration > config.DURATION_LIMIT:
             return await mystic.edit_text(
                 _["play_6"].format(config.DURATION_LIMIT_MIN, app.mention)
             )
@@ -145,6 +148,7 @@ async def play_commnd(
                     forceplay=fplay,
                 )
             except Exception as e:
+                traceback.print_exc() # LOG THE ERROR
                 ex_type = type(e).__name__
                 err = e if ex_type == "AssistantErr" else _["general_2"].format(ex_type)
                 return await mystic.edit_text(err)
@@ -189,6 +193,7 @@ async def play_commnd(
                     forceplay=fplay,
                 )
             except Exception as e:
+                traceback.print_exc() # LOG THE ERROR
                 ex_type = type(e).__name__
                 err = e if ex_type == "AssistantErr" else _["general_2"].format(ex_type)
                 return await mystic.edit_text(err)
@@ -301,7 +306,7 @@ async def play_commnd(
                 details, track_path = await SoundCloud.download(url)
             except:
                 return await mystic.edit_text(_["play_3"])
-            duration_sec = details["duration_sec"]
+            duration_sec = details.get("duration_sec", 0) # FIX: safe dict access
             if duration_sec > config.DURATION_LIMIT:
                 return await mystic.edit_text(
                     _["play_6"].format(
@@ -322,6 +327,7 @@ async def play_commnd(
                     forceplay=fplay,
                 )
             except Exception as e:
+                traceback.print_exc() # LOG THE ERROR
                 ex_type = type(e).__name__
                 err = e if ex_type == "AssistantErr" else _["general_2"].format(ex_type)
                 return await mystic.edit_text(err)
@@ -336,6 +342,7 @@ async def play_commnd(
                     text=_["play_17"],
                 )
             except Exception as e:
+                traceback.print_exc()
                 return await mystic.edit_text(_["general_2"].format(type(e).__name__))
             await mystic.edit_text(_["str_2"])
             try:
@@ -352,6 +359,7 @@ async def play_commnd(
                     forceplay=fplay,
                 )
             except Exception as e:
+                traceback.print_exc() # LOG THE ERROR
                 ex_type = type(e).__name__
                 err = e if ex_type == "AssistantErr" else _["general_2"].format(ex_type)
                 return await mystic.edit_text(err)
@@ -370,17 +378,22 @@ async def play_commnd(
         try:
             details, track_id = await YouTube.track(query)
         except Exception as ex:
-            print(ex)
+            traceback.print_exc()
             return await mystic.edit_text(_["play_3"])
         streamtype = "youtube"
+        
     if str(playmode) == "Direct":
         if not plist_type:
-            if details["duration_min"]:
-                duration_sec = time_to_seconds(details["duration_min"])
-                if duration_sec > config.DURATION_LIMIT:
-                    return await mystic.edit_text(
-                        _["play_6"].format(config.DURATION_LIMIT_MIN, app.mention)
-                    )
+            # FIX: Safely handling duration from dict
+            if details.get("duration_min"):
+                try:
+                    duration_sec = time_to_seconds(details["duration_min"])
+                    if duration_sec > config.DURATION_LIMIT:
+                        return await mystic.edit_text(
+                            _["play_6"].format(config.DURATION_LIMIT_MIN, app.mention)
+                        )
+                except Exception:
+                    pass # Ignore conversion error and play
             else:
                 buttons = livestream_markup(
                     _,
@@ -409,6 +422,7 @@ async def play_commnd(
                 forceplay=fplay,
             )
         except Exception as e:
+            traceback.print_exc() # LOG THE ERROR
             ex_type = type(e).__name__
             err = e if ex_type == "AssistantErr" else _["general_2"].format(ex_type)
             return await mystic.edit_text(err)
@@ -503,12 +517,15 @@ async def play_music(client, CallbackQuery, _):
         details, track_id = await YouTube.track(vidid, True)
     except:
         return await mystic.edit_text(_["play_3"])
-    if details["duration_min"]:
-        duration_sec = time_to_seconds(details["duration_min"])
-        if duration_sec > config.DURATION_LIMIT:
-            return await mystic.edit_text(
-                _["play_6"].format(config.DURATION_LIMIT_MIN, app.mention)
-            )
+    if details.get("duration_min"): # FIX: Safe get
+        try:
+            duration_sec = time_to_seconds(details["duration_min"])
+            if duration_sec > config.DURATION_LIMIT:
+                return await mystic.edit_text(
+                    _["play_6"].format(config.DURATION_LIMIT_MIN, app.mention)
+                )
+        except Exception:
+            pass
     else:
         buttons = livestream_markup(
             _,
@@ -538,6 +555,7 @@ async def play_music(client, CallbackQuery, _):
             forceplay=ffplay,
         )
     except Exception as e:
+        traceback.print_exc() # LOG THE ERROR
         ex_type = type(e).__name__
         err = e if ex_type == "AssistantErr" else _["general_2"].format(ex_type)
         return await mystic.edit_text(err)
@@ -636,6 +654,7 @@ async def play_playlists_command(client, CallbackQuery, _):
             forceplay=ffplay,
         )
     except Exception as e:
+        traceback.print_exc() # LOG THE ERROR
         ex_type = type(e).__name__
         err = e if ex_type == "AssistantErr" else _["general_2"].format(ex_type)
         return await mystic.edit_text(err)
