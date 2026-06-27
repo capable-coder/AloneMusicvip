@@ -12,4 +12,5 @@ COPY . .
 RUN pip install -U pip uv
 RUN uv pip install --system .
 
-CMD ["AloneMusic"]
+#CMD ["AloneMusic"]
+CMD ["alonemusic"]
