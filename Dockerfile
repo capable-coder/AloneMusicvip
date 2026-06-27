@@ -12,5 +12,6 @@ COPY . .
 RUN pip install -U pip uv
 RUN uv pip install --system .
 
-#CMD ["AloneMusic"]
-CMD ["alonemusic"]
+# Run both the dummy web server and the music bot
+CMD sh -c "python server.py & alonemusic"
+
