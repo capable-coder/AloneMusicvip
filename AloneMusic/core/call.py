@@ -12,14 +12,14 @@ import shlex # SECURITY FIX: Added shlex to prevent Command Injection
 from datetime import datetime, timedelta
 from typing import Union
 
+from ntgcalls import TelegramServerError
 from pyrogram import Client
 from pyrogram.errors import ChatAdminRequired, FloodWait
 from pyrogram.types import InlineKeyboardMarkup
 from pytgcalls import PyTgCalls
-from pytgcalls.exceptions import PyTgCallsException # FIX: Updated Exception handling
+from pytgcalls.exceptions import NoActiveGroupCall
 from pytgcalls.types import (AudioQuality, ChatUpdate, MediaStream,
                              StreamEnded, Update, VideoQuality)
-from pytgcalls.types.stream import StreamAudioEnded # FIX: Added proper stream end import
 
 import config
 from AloneMusic import LOGGER, YouTube, app
@@ -287,13 +287,12 @@ class Call:
 
         try:
             await assistant.play(chat_id, stream)
-        except PyTgCallsException as e: # FIX: Catching correct exception
-            raise AssistantErr(f"ᴜɴᴀʙʟᴇ ᴛᴏ ᴊᴏɪɴ ᴛʜᴇ ɢʀᴏᴜᴘ ᴄᴀʟʟ.\nRᴇᴀsᴏɴ: {e}")
-        except ChatAdminRequired:
+        except (NoActiveGroupCall, ChatAdminRequired):
             raise AssistantErr(_["call_8"])
+        except TelegramServerError:
+            raise AssistantErr(_["call_10"])
         except Exception as e:
             raise AssistantErr(f"ᴜɴᴀʙʟᴇ ᴛᴏ ᴊᴏɪɴ ᴛʜᴇ ɢʀᴏᴜᴘ ᴄᴀʟʟ.\nRᴇᴀsᴏɴ: {e}")
-            
         self.active_calls.add(chat_id)
         await add_active_chat(chat_id)
         await music_on(chat_id)
@@ -302,12 +301,9 @@ class Call:
 
         if await is_autoend():
             counter[chat_id] = {}
-            try:
-                users = len(await assistant.get_participants(chat_id))
-                if users == 1:
-                    autoend[chat_id] = datetime.now() + timedelta(minutes=1)
-            except Exception:
-                pass
+            users = len(await assistant.get_participants(chat_id))
+            if users == 1:
+                autoend[chat_id] = datetime.now() + timedelta(minutes=1)
 
     async def play(self, client, chat_id: int) -> None:
         check = db.get(chat_id)
@@ -325,7 +321,7 @@ class Call:
                 if chat_id in self.active_calls:
                     try:
                         await client.leave_call(chat_id)
-                    except PyTgCallsException:
+                    except NoActiveGroupCall:
                         pass
                     except Exception:
                         pass
@@ -562,9 +558,10 @@ class Call:
                         await self.stop_stream(update.chat_id)
                         return
 
-                elif isinstance(update, StreamAudioEnded): # FIX: Proper stream ended detection
-                    assistant = await group_assistant(self, update.chat_id)
-                    await self.play(assistant, update.chat_id)
+                elif isinstance(update, StreamEnded):
+                    if update.stream_type == StreamEnded.Type.AUDIO:
+                        assistant = await group_assistant(self, update.chat_id)
+                        await self.play(assistant, update.chat_id)
 
             except Exception:
                 import sys
@@ -587,4 +584,3 @@ class Call:
 
 
 Alone = Call()
-
