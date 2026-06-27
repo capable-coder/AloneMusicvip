@@ -9,7 +9,7 @@
 from pyrogram import Client, errors
 from pyrogram.enums import ChatMemberStatus, ParseMode
 
-from AloneMusic import config
+import config
 
 from ..logging import LOGGER
 
